@@ -13,7 +13,7 @@ client = discord.Client()
 bot = commands.Bot(command_prefix='!', description='')
 
 config = open('botData.txt', 'r')
-conf = config.readlines() #push to array or do directly
+conf = config.readlines() 
 token = conf[0][:-1]
 server_id = int(conf[1][:-1])
 channel_id = int(conf[2][:-1])
