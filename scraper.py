@@ -25,9 +25,27 @@ for i in channel_id:
 
 writeLocl = conf[3][:-1]
 
-def clearBuffer(buffer):
-    with open(writeLocl+'.txt', 'ab') as file:
+def clearBuffer(buffer, name):
+    with open(name+'.txt', 'ab') as file:
         file.write(buffer)
+
+def write_lines_to_file(buffer, name):
+
+    lines = bytes()
+    lineNum = 0
+
+    for message in buffer:
+        lines = lines + (str(message.created_at.strftime("%d-%m-%Y")) + "# " + str(message.channel) + "- " + message.author.name + ": " + unicodedata.normalize('NFKD', message.content)+'\n\n').encode('UTF-8', 'ignore')
+        if(message.attachments):
+            for attachment in message.attachments:
+                download = requests.get(attachment.url).content
+                with open(str(message.created_at.strftime("%d-%m-%Y")) + attachment.filename, 'wb') as handler:
+                    handler.write(download)
+        lineNum += 1
+        if lineNum % 10000 == 0:
+            clearBuffer(lines, name)
+            lines = bytes()
+    clearBuffer(lines, name)
 
 @client.event
 async def on_ready():
@@ -35,7 +53,6 @@ async def on_ready():
     print(str(datetime.now()))
     print('------')
 
-    lines = bytes()
     messages = []
 
     try:
@@ -61,6 +78,9 @@ async def on_ready():
                 print('unable to access '+ channel.name)
                 print('reason: '+str(e))
 
+    for i in data:
+        write_lines_to_file(i, str(i[0].channel))
+
     messages_in_order = []
     curr_message_data = 0
     data_exists = True
@@ -70,8 +90,6 @@ async def on_ready():
     for iter in range(0, len(data)):
         messages_storage[iter] = data[iter].pop()
         times_storage[iter] = messages_storage[iter].created_at
-
-    print(times_storage)
 
     while data_exists:
         most_recent = min(times_storage)
@@ -93,22 +111,8 @@ async def on_ready():
                 data_exists = False
                 break 
 
-    output = []
-    lineNum = 0
-    most_recent = 0
-    for message in messages_in_order:
-        print(message.channel)
-        lines = lines + (str(message.created_at.strftime("%d-%m-%Y")) + "# " + str(message.channel) + "- " + message.author.name + ": " + unicodedata.normalize('NFKD', message.content)+'\n\n').encode('UTF-8', 'ignore')
-        if(message.attachments):
-            for attachment in message.attachments:
-                download = requests.get(attachment.url).content
-                with open(str(message.created_at.strftime("%d-%m-%Y")) + attachment.filename, 'wb') as handler:
-                    handler.write(download)
-        lineNum += 1
-        if lineNum % 10000 == 0:
-            clearBuffer(lines)
-            lines = bytes()
-    clearBuffer(lines)
+    write_lines_to_file(messages_in_order, writeLocl)
+    
     print('complete')
     input("Press enter to close, ignore all the error stuff that follows this")
     quit(0)
