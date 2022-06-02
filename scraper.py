@@ -6,6 +6,7 @@ from datetime import datetime
 import unicodedata
 import os
 import requests
+import time
 
 import discord
 from discord.ext import commands
@@ -20,6 +21,9 @@ server_id = int(conf[1][:-1])
 channel_id = conf[2][:-1].split(",")
 num_channel_id = []
 
+already_running = False
+
+
 for i in channel_id:
     num_channel_id.append((int(i)))
 
@@ -31,12 +35,14 @@ def clearBuffer(buffer, name):
 
 def write_lines_to_file(buffer, name):
 
+    attachements_already_scraped = False
+
     lines = bytes()
     lineNum = 0
 
     for message in buffer:
         lines = lines + (str(message.created_at.strftime("%d-%m-%Y")) + "# " + str(message.channel) + "- " + message.author.name + ": " + unicodedata.normalize('NFKD', message.content)+'\n\n').encode('UTF-8', 'ignore')
-        if(message.attachments):
+        if message.attachments and not attachements_already_scraped:
             for attachment in message.attachments:
                 download = requests.get(attachment.url).content
                 with open(str(message.created_at.strftime("%d-%m-%Y")) + attachment.filename, 'wb') as handler:
@@ -47,13 +53,11 @@ def write_lines_to_file(buffer, name):
             lines = bytes()
     clearBuffer(lines, name)
 
-@client.event
-async def on_ready():
-    print('Logged in as ' + client.user.name)
-    print(str(datetime.now()))
-    print('------')
+async def scrape_data():
 
-    messages = []
+    global already_running
+
+    already_running = True
 
     try:
         f = open(writeLocl+'.txt')
@@ -71,15 +75,19 @@ async def on_ready():
 
     data = []
     for channel in channels:
+        data_temp = []
         try:
             print(f"Scraping {channel.name}")
-            data.append(await channel.history(limit = 10).flatten())
+            data_temp = await channel.history(limit = 2000000).flatten()
         except Exception as e:
                 print('unable to access '+ channel.name)
                 print('reason: '+str(e))
-
-    for i in data:
-        write_lines_to_file(i, str(i[0].channel))
+        data_temp.reverse()
+        write_lines_to_file(data_temp, str(channel.name))
+        print(f'{channel.name}->{len(data_temp)}')
+        if data_temp:
+            data.append(data_temp)
+        time.sleep(30)
 
     messages_in_order = []
     curr_message_data = 0
@@ -87,21 +95,26 @@ async def on_ready():
     times_storage = [0]*len(data)
     messages_storage = [0]*len(data)
 
+    print("->Merging sources in time order<-")
+
     for iter in range(0, len(data)):
-        messages_storage[iter] = data[iter].pop()
+        messages_storage[iter] = data[iter].pop(0)
         times_storage[iter] = messages_storage[iter].created_at
 
+    print(f"Merge begins->{messages_storage}")
+
+    counter = 0
     while data_exists:
-        most_recent = min(times_storage)
-        index = times_storage.index(most_recent)
+        least_recent = min(times_storage)
+        index = times_storage.index(least_recent)
         messages_in_order.append(messages_storage[index])
         
         if(data[index]):
-            messages_storage[index] = data[index].pop()
+            messages_storage[index] = data[index].pop(0)
             times_storage[index] = messages_storage[index].created_at
         else:
             messages_storage[index] = 0
-            times_storage[index] = datetime.now()
+            times_storage[index] = datetime.now() #TODO make this as early 
 
             finished = True
             for i in messages_storage:
@@ -110,9 +123,34 @@ async def on_ready():
             if finished:
                 data_exists = False
                 break 
+        counter += 1
+        
+        if counter % 10000 == 0:
+            print(messages_in_order[0:100])
+            write_lines_to_file(messages_in_order, writeLocl)
+            messages_in_order = []
+
+    
 
     write_lines_to_file(messages_in_order, writeLocl)
-    
+
+    already_running = False
+
+@client.event
+async def on_ready():
+    global already_running
+
+    print('Logged in as ' + client.user.name)
+    print(str(datetime.now()))
+    print('------')
+
+
+    if not already_running:
+        await scrape_data()
+    else:
+        while already_running:
+            time.sleep(500)
+
     print('complete')
     input("Press enter to close, ignore all the error stuff that follows this")
     quit(0)
