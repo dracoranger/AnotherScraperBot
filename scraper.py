@@ -44,9 +44,10 @@ def write_lines_to_file(buffer, name):
         lines = lines + (str(message.created_at.strftime("%d-%m-%Y")) + "# " + str(message.channel) + "- " + message.author.name + ": " + unicodedata.normalize('NFKD', message.content)+'\n\n').encode('UTF-8', 'ignore')
         if message.attachments and not attachements_already_scraped:
             for attachment in message.attachments:
-                download = requests.get(attachment.url).content
-                with open(str(message.created_at.strftime("%d-%m-%Y")) + attachment.filename, 'wb') as handler:
-                    handler.write(download)
+                if not os.path.isfile(str(message.created_at.strftime("%d-%m-%Y")) + attachment.filename):
+                    download = requests.get(attachment.url).content
+                    with open(str(message.created_at.strftime("%d-%m-%Y")) + attachment.filename, 'wb') as handler:
+                        handler.write(download)
         lineNum += 1
         if lineNum % 10000 == 0:
             clearBuffer(lines, name)
@@ -101,7 +102,7 @@ async def scrape_data():
         messages_storage[iter] = data[iter].pop(0)
         times_storage[iter] = messages_storage[iter].created_at
 
-    print(f"Merge begins->{messages_storage}")
+    print(f"Merge begins")
 
     counter = 0
     while data_exists:
@@ -114,7 +115,7 @@ async def scrape_data():
             times_storage[index] = messages_storage[index].created_at
         else:
             messages_storage[index] = 0
-            times_storage[index] = datetime.now() #TODO make this as early 
+            times_storage[index] = datetime.now() 
 
             finished = True
             for i in messages_storage:
@@ -126,7 +127,6 @@ async def scrape_data():
         counter += 1
         
         if counter % 10000 == 0:
-            print(messages_in_order[0:100])
             write_lines_to_file(messages_in_order, writeLocl)
             messages_in_order = []
 
@@ -153,6 +153,6 @@ async def on_ready():
 
     print('complete')
     input("Press enter to close, ignore all the error stuff that follows this")
-    quit(0)
+    quit(1)
 
 client.run(token)
