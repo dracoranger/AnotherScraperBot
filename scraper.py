@@ -71,8 +71,20 @@ async def scrape_data():
         f.close()
 
     channels = []
+    prev = 0
     for i in num_channel_id:
-        channels.append(client.get_channel(i))
+        if os.path.isfile(str(client.get_channel(i).name)+".txt") and prev != -1:
+            print(f"Skipping {client.get_channel(i).name}")
+            prev = i
+        elif prev != -1 and prev != 0:
+            print(f"Didn't find {client.get_channel(i).name}")
+            channels.append(client.get_channel(prev))
+            channels.append(client.get_channel(i))
+            prev = -1
+        else:
+            print(f"Adding {client.get_channel(i).name}")
+            channels.append(client.get_channel(i))
+
 
     data = []
     for channel in channels:
